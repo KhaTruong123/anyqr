@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnyQR payment</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><b>AnyQR</b><nav><a href="/">New payment</a><a href="/merchant">Merchant ledger</a></nav></header>
+<main>
+  <div id="demo" class="banner" hidden></div>
+  <div class="card">
+    <span id="status" class="status"></span>
+    <p class="big" id="headline"></p>
+    <p class="muted" id="sub"></p>
+  </div>
+
+  <div class="card" id="depositCard" hidden>
+    <h2 style="margin-top:0">Send exactly</h2>
+    <p class="big" id="sendAmount"></p>
+    <div id="liveDeposit" hidden>
+      <p>to this deposit address on <b id="chain"></b>:</p>
+      <img id="depositQr" class="qr" alt="Deposit address QR">
+      <p class="mono" id="depositAddress"></p>
+      <p class="muted" id="memo"></p>
+      <p class="muted">Send before <b id="deadline"></b>. If the swap cannot complete, NEAR Intents refunds you on the same chain.</p>
+      <label for="txHash">Already sent? Paste the transaction hash to speed things up</label>
+      <input id="txHash" placeholder="0x...">
+      <button class="secondary" id="sendTx">Submit hash</button>
+    </div>
+    <div id="dryDeposit" hidden>
+      <p class="muted">This is a dry-run quote: 1Click priced the swap but gave no deposit address, so no money can be sent. Press the button to walk the payment through the same states a real one goes through.</p>
+      <button id="simulate">Simulate the customer's deposit</button>
+    </div>
+    <p id="err" class="error"></p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Details</h2>
+    <dl id="details"></dl>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">Proof</h2>
+    <ul id="links"></ul>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">Timeline</h2>
+    <ol class="timeline" id="timeline"></ol>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const id = location.pathname.split("/").pop();
+const HEADLINES = {
+  awaiting_deposit: "Waiting for the customer's payment",
+  processing: "Payment received, swapping to USDC",
+  settling: "USDC arrived, paying the merchant's bank",
+  paid: "Paid",
+  refunded: "Refunded to the customer",
+  failed: "Failed",
+  expired: "Expired, nothing was charged",
+};
+const fmt = (n, c) => Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " " + c;
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+async function load() {
+  const res = await fetch("/api/payments/" + id);
+  if (!res.ok) { $("headline").textContent = "Payment not found"; return; }
+  const p = await res.json();
+  $("status").textContent = p.status.replace("_", " ");
+  $("status").className = "status " + p.status;
+  $("headline").textContent = HEADLINES[p.status];
+  $("sub").textContent = `${fmt(p.amountLocal, p.currency)} to ${p.merchant.name}, ${p.merchant.city} (${p.merchant.scheme} ${p.merchant.account})`;
+
+  const notes = [];
+  if (p.simulated) notes.push("Dry run: the quote is real, the deposit and swap are simulated.");
+  if (p.demoPayout) notes.push("Demo payout: local currency is not sent, the rate is a round demo rate.");
+  $("demo").hidden = !notes.length; $("demo").textContent = notes.join(" ");
+
+  $("depositCard").hidden = p.status !== "awaiting_deposit";
+  $("sendAmount").textContent = `${p.quote.amountInFormatted} ${p.origin.symbol}`;
+  $("liveDeposit").hidden = p.simulated; $("dryDeposit").hidden = !p.simulated;
+  if (!p.simulated) {
+    $("chain").textContent = p.origin.label;
+    $("depositAddress").textContent = p.quote.depositAddress;
+    $("depositQr").src = `/api/payments/${id}/deposit-qr.svg`;
+    $("memo").textContent = p.quote.depositMemo ? "Memo (required): " + p.quote.depositMemo : "";
+    $("deadline").textContent = new Date(p.quote.deadline).toLocaleString();
+  }
+
+  const rows = [
+    ["Merchant receives", fmt(p.amountLocal, p.currency)],
+    ["Settled as", `${p.usdc} USDC on Stellar`],
+    ["Customer pays", `${Number(p.quote.amountInFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${p.origin.symbol} (about $${Number(p.quote.amountInUsd).toFixed(2)})`],
+    ["Customer chain", p.origin.label],
+    ["Refund address", p.refundTo],
+    ["Swap status (1Click)", p.swapStatus ?? "not started"],
+    ["Estimated swap time", `${p.quote.timeEstimate} s after the deposit confirms`],
+    ["Payment id", p.id],
+  ];
+  if (p.refundedAmount) rows.push(["Refunded", `${p.refundedAmount} ${p.origin.symbol} (${p.refundReason ?? ""})`]);
+  if (p.error) rows.push(["Error", p.error]);
+  $("details").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+
+  const links = [];
+  if (p.links.intentsExplorer) links.push(["NEAR Intents explorer", p.links.intentsExplorer]);
+  p.links.customerTxs.forEach((u) => links.push(["Customer deposit", u]));
+  p.links.nearTxs.forEach((u) => links.push(["NEAR transaction", u]));
+  p.links.stellarTxs.forEach((u) => links.push(["USDC delivered on Stellar", u]));
+  if (p.links.payoutTx) links.push(["Gaian funding on Stellar", p.links.payoutTx]);
+  $("links").innerHTML = links.length
+    ? links.map(([k, u]) => `<li>${esc(k)}: <a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`).join("")
+    : `<li class="muted">${p.simulated ? "Simulated payment, there are no on-chain transactions." : "Links appear here as soon as each step lands on chain."}</li>`;
+
+  $("timeline").innerHTML = p.history.map((h) => `<li><span class="muted">${esc(new Date(h.at).toLocaleTimeString())}</span> ${esc(h.note)}</li>`).join("");
+  return p;
+}
+
+async function post(path, body) {
+  $("err").textContent = "";
+  const res = await fetch(`/api/payments/${id}/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  if (!res.ok) $("err").textContent = (await res.json()).error;
+  load();
+}
+$("simulate").onclick = () => post("simulate-deposit");
+$("sendTx").onclick = () => post("deposit-tx", { txHash: $("txHash").value });
+
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

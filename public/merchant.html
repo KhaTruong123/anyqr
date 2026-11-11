@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnyQR merchant ledger</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><b>AnyQR</b><nav><a href="/">New payment</a><a href="/merchant">Merchant ledger</a></nav></header>
+<main style="max-width:1000px">
+  <div class="card">
+    <h1 style="margin-top:0">Merchant ledger</h1>
+    <p class="muted">Every payment, newest first. The CSV has one row per payment with the local amount, the USDC settled, what the customer paid and a link to every transaction.</p>
+    <a href="/api/payments.csv"><button>Download CSV</button></a>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Created</th><th>Status</th><th>Merchant</th><th>Local amount</th><th>USDC</th><th>Customer paid</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function load() {
+  const list = await (await fetch("/api/payments")).json();
+  document.getElementById("rows").innerHTML = list.length
+    ? list.map((p) => `<tr>
+        <td><a href="/pay/${esc(p.id)}">${esc(new Date(p.createdAt).toLocaleString())}</a></td>
+        <td><span class="status ${esc(p.status)}">${esc(p.status.replace("_", " "))}</span></td>
+        <td>${esc(p.merchant.name)} (${esc(p.merchant.country)})</td>
+        <td>${esc(Number(p.amountLocal).toLocaleString("en-US"))} ${esc(p.currency)}</td>
+        <td>${esc(p.usdc)}</td>
+        <td>${esc(p.quote.amountInFormatted)} ${esc(p.origin.symbol)} on ${esc(p.origin.blockchain)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">No payments yet.</td></tr>`;
+}
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

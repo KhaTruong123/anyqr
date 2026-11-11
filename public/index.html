@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnyQR: pay a bank QR from any chain</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><b>AnyQR</b><nav><a href="/">New payment</a><a href="/merchant">Merchant ledger</a></nav></header>
+<main>
+  <div id="mode" class="banner" hidden></div>
+  <div class="card">
+    <h1 style="margin-top:0">Pay a merchant's bank QR</h1>
+    <p class="muted">Paste the text of a VietQR, PromptPay, QR Ph, QRIS or Pix code. You pay with the token you already hold. The merchant receives local currency in the bank account printed in the QR.</p>
+
+    <label>Try a demo merchant</label>
+    <div class="chips" id="samples"></div>
+
+    <label for="qr">QR code text</label>
+    <textarea id="qr" placeholder="000201010212..."></textarea>
+
+    <label for="amount">Amount in local currency <span class="muted">(only if the QR has none)</span></label>
+    <input id="amount" type="number" min="0" step="any" placeholder="e.g. 120">
+
+    <label for="origin">Pay with</label>
+    <select id="origin"></select>
+
+    <label for="refundTo">Your refund address on that chain</label>
+    <input id="refundTo" placeholder="0x... (used only if the swap fails)">
+
+    <button id="go">Get quote</button>
+    <p id="err" class="error"></p>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+fetch("/api/options").then((r) => r.json()).then((o) => {
+  if (o.intentsMode !== "live" || o.gaianMode !== "sandbox") {
+    $("mode").hidden = false;
+    $("mode").textContent =
+      (o.intentsMode === "live" ? "NEAR Intents: LIVE mainnet quotes. " : "NEAR Intents: real quotes in dry mode, deposits are simulated. ") +
+      (o.gaianMode === "sandbox" ? "" : "Local payout: demo rates, no local currency moves. ") +
+      `Limit ${o.maxPaymentUsd} USDC per payment.`;
+  }
+  for (const t of o.tokens) $("origin").add(new Option(t.label, t.id));
+  for (const s of o.samples) {
+    const b = document.createElement("button");
+    b.className = "secondary"; b.textContent = s.label; b.type = "button";
+    b.onclick = () => { $("qr").value = s.qr; $("amount").value = ""; };
+    $("samples").append(b);
+  }
+});
+$("go").onclick = async () => {
+  $("err").textContent = ""; $("go").disabled = true;
+  try {
+    const res = await fetch("/api/payments", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qr: $("qr").value, amount: $("amount").value, origin: $("origin").value, refundTo: $("refundTo").value }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error);
+    location.href = "/pay/" + body.id;
+  } catch (e) { $("err").textContent = e.message; } finally { $("go").disabled = false; }
+};
+</script>
+</body>
+</html>
