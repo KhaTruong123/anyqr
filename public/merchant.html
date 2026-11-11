@@ -32,7 +32,7 @@ async function load() {
         <td>${esc(p.merchant.name)} (${esc(p.merchant.country)})</td>
         <td>${esc(Number(p.amountLocal).toLocaleString("en-US"))} ${esc(p.currency)}</td>
         <td>${esc(p.usdc)}</td>
-        <td>${esc(p.quote.amountInFormatted)} ${esc(p.origin.symbol)} on ${esc(p.origin.blockchain)}</td></tr>`).join("")
+        <td>${esc(Number(p.quote.amountInFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 }))} ${esc(p.origin.symbol)} (${esc(p.origin.label)})</td></tr>`).join("")
     : `<tr><td colspan="6" class="muted">No payments yet.</td></tr>`;
 }
 load();
