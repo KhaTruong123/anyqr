@@ -1,0 +1,28 @@
+{
+  "name": "anyqr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pay a merchant's bank QR code (VietQR, PromptPay, QR Ph, QRIS, Pix) from any chain and token. NEAR Intents 1Click swaps the payment into USDC on Stellar, Gaian pays out local currency to the bank account in the QR.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "demo:dry": "tsx scripts/demo-dry.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "17.2.1",
+    "dotenv": "16.4.7",
+    "express": "4.21.2",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.21",
+    "@types/node": "22.10.2",
+    "@types/qrcode": "1.5.5",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2"
+  }
+}
