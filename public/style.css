@@ -33,3 +33,6 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
 .qr { width: 200px; height: 200px; }
 @media (max-width: 560px) { dl { grid-template-columns: 1fr; } }
+
+/* Long addresses and hashes wrap instead of overflowing the card. */
+a, dd, td, li, p, span, code { overflow-wrap: anywhere; }

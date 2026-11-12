@@ -18,6 +18,16 @@ export function buildApp(service: PaymentService) {
   app.use(express.json({ limit: "16kb" }));
   app.use(express.static(fileURLToPath(new URL("../public", import.meta.url)), { extensions: ["html"] }));
 
+  const ORIGIN_EXPLORERS: Record<string, string> = {
+    bsc: "https://bscscan.com/tx/",
+    base: "https://basescan.org/tx/",
+    arb: "https://arbiscan.io/tx/",
+    eth: "https://etherscan.io/tx/",
+    sol: "https://solscan.io/tx/",
+    near: "https://nearblocks.io/txns/",
+  };
+  const originTxUrl = (chain: string, hash: string) => (hash && ORIGIN_EXPLORERS[chain] ? ORIGIN_EXPLORERS[chain] + hash : "");
+
   const view = (p: Payment) => {
     const { qr: _qr, refundTo, ...rest } = p;
     return {
@@ -28,9 +38,9 @@ export function buildApp(service: PaymentService) {
       links: {
         recipient: p.delivery.target === "intents" ? nearAccountUrl(p.delivery.recipient) : `https://stellar.expert/explorer/public/account/${encodeURIComponent(p.delivery.recipient)}`,
         intentsExplorer: p.quote.depositAddress ? intentsExplorerUrl(p.quote.depositAddress) : null,
-        customerTxs: p.originTxs.map((t) => t.explorerUrl),
+        customerTxs: p.originTxs.map((t) => t.explorerUrl || originTxUrl(p.origin.blockchain, t.hash)).filter(Boolean),
         nearTxs: p.nearTxs.map(nearTxUrl),
-        stellarTxs: p.destinationTxs.map((t) => t.explorerUrl),
+        stellarTxs: p.destinationTxs.map((t) => t.explorerUrl).filter(Boolean),
         payoutTx: p.payoutTxHash ? `https://stellar.expert/explorer/public/tx/${p.payoutTxHash}` : null,
       },
     };
