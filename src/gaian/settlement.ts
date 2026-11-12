@@ -98,6 +98,9 @@ async function signAndSubmit(xdr: string): Promise<string> {
 
 export function makeSettlement(): Settlement {
   if (config.gaianMode === "sandbox") {
+    // The sandbox order is funded with a Stellar transaction from the settlement account,
+    // so the USDC must land on Stellar for each payment.
+    if (config.deliverTo !== "stellar") throw new Error("GAIAN_MODE=sandbox funds each order on Stellar, set DELIVER_TO=stellar");
     if (!config.gaianKey || !config.gaianSecret || !config.gaianUserId) throw new Error("GAIAN_MODE=sandbox needs GAIAN_KEY, GAIAN_SECRET and GAIAN_USER_ID");
     return new GaianSandboxSettlement();
   }

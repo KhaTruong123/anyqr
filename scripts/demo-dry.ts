@@ -10,7 +10,7 @@ import { OneClickClient } from "../src/oneclick.js";
 import { PaymentService } from "../src/payments.js";
 import { SAMPLE_QRS } from "../src/sample-qrs.js";
 import { PaymentStore } from "../src/store.js";
-import { DEMO_SETTLEMENT_ADDRESS } from "../src/demo-defaults.js";
+import { deliveryLabel, resolveDelivery } from "../src/delivery.js";
 
 const RUNS: Array<{ sample: string; origin: string; refundTo: string; amount?: number }> = [
   { sample: "vn", origin: "bsc:USDT", refundTo: "0x2527D02599Ba641c19FEa793cD0F167589a0f10D" },
@@ -23,13 +23,15 @@ const RUNS: Array<{ sample: string; origin: string; refundTo: string; amount?: n
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anyqr-demo-"));
 const service = new PaymentService(new PaymentStore(path.join(dir, "payments.json")), new OneClickClient(), new MockSettlement(), {
   simulated: true,
-  settlementAddress: config.settlementStellarAddress || DEMO_SETTLEMENT_ADDRESS,
+  // Always dry here: a placeholder recipient is fine when no money can move.
+  delivery: await resolveDelivery({ target: config.deliverTo, live: false, nearAccount: config.settlementNearAccount, stellarAddress: config.settlementStellarAddress }),
   maxPaymentUsd: config.maxPaymentUsd,
   slippageBps: config.slippageBps,
   depositWindowMinutes: config.depositWindowMinutes,
 });
 
-console.log("AnyQR dry run: real NEAR Intents 1Click quotes (dry: true), simulated deposits, demo payout.\n");
+console.log("AnyQR dry run: real NEAR Intents 1Click quotes (dry: true), simulated deposits, demo payout.");
+console.log(`USDC goes to: ${deliveryLabel(config.deliverTo)}\n`);
 for (const run of RUNS) {
   const sample = SAMPLE_QRS.find((s) => s.id === run.sample)!;
   try {
@@ -37,7 +39,7 @@ for (const run of RUNS) {
     await service.simulateDeposit(p.id);
     const done = service.get(p.id)!;
     console.log(`${sample.label}`);
-    console.log(`  merchant gets ${done.amountLocal} ${done.currency}, settled as ${done.usdc} USDC on Stellar`);
+    console.log(`  merchant gets ${done.amountLocal} ${done.currency}, settled as ${done.usdc} ${deliveryLabel(done.delivery.target)} to ${done.delivery.recipient}`);
     console.log(`  customer pays ${done.quote.amountInFormatted} ${done.origin.symbol} (${done.origin.label}, about $${Number(done.quote.amountInUsd).toFixed(2)}), swap time about ${done.quote.timeEstimate}s`);
     console.log(`  status: ${done.history.map((h) => h.status).join(" > ")}\n`);
   } catch (err) {

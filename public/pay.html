@@ -52,15 +52,6 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const id = location.pathname.split("/").pop();
-const HEADLINES = {
-  awaiting_deposit: "Waiting for the customer's payment",
-  processing: "Payment received, swapping to USDC",
-  settling: "USDC arrived, paying the merchant's bank",
-  paid: "Paid",
-  refunded: "Refunded to the customer",
-  failed: "Failed",
-  expired: "Expired, nothing was charged",
-};
 const fmt = (n, c) => Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " " + c;
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -70,8 +61,9 @@ async function load() {
   const p = await res.json();
   $("status").textContent = p.status.replace("_", " ");
   $("status").className = "status " + p.status;
-  $("headline").textContent = HEADLINES[p.status];
-  $("sub").textContent = `${fmt(p.amountLocal, p.currency)} to ${p.merchant.name}, ${p.merchant.city} (${p.merchant.scheme} ${p.merchant.account})`;
+  $("headline").textContent = p.statusLabel;
+  $("sub").textContent = `${fmt(p.amountLocal, p.currency)} to ${p.merchant.name}, ${p.merchant.city} (${p.merchant.scheme} ${p.merchant.account})`
+    + (p.status === "processing" ? `. NEAR Intents is swapping it to USDC, about ${p.quote.timeEstimate} s.` : "");
 
   const notes = [];
   if (p.simulated) notes.push("Dry run: the quote is real, the deposit and swap are simulated.");
@@ -91,27 +83,30 @@ async function load() {
 
   const rows = [
     ["Merchant receives", fmt(p.amountLocal, p.currency)],
-    ["Settled as", `${p.usdc} USDC on Stellar`],
+    ["Settled as", `${p.usdc} ${p.deliveryLabel}`],
+    ["Settled to", p.delivery.recipient],
     ["Customer pays", `${Number(p.quote.amountInFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${p.origin.symbol} (about $${Number(p.quote.amountInUsd).toFixed(2)})`],
     ["Customer chain", p.origin.label],
     ["Refund address", p.refundTo],
     ["Swap status (1Click)", p.swapStatus ?? "not started"],
     ["Estimated swap time", `${p.quote.timeEstimate} s after the deposit confirms`],
+    ...(p.depositReceivedAt ? [["Customer deposit received", new Date(p.depositReceivedAt).toLocaleTimeString()]] : []),
     ["Payment id", p.id],
   ];
   if (p.refundedAmount) rows.push(["Refunded", `${p.refundedAmount} ${p.origin.symbol} (${p.refundReason ?? ""})`]);
   if (p.error) rows.push(["Error", p.error]);
   $("details").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-  const links = [];
-  if (p.links.intentsExplorer) links.push(["NEAR Intents explorer", p.links.intentsExplorer]);
-  p.links.customerTxs.forEach((u) => links.push(["Customer deposit", u]));
-  p.links.nearTxs.forEach((u) => links.push(["NEAR transaction", u]));
-  p.links.stellarTxs.forEach((u) => links.push(["USDC delivered on Stellar", u]));
-  if (p.links.payoutTx) links.push(["Gaian funding on Stellar", p.links.payoutTx]);
-  $("links").innerHTML = links.length
-    ? links.map(([k, u]) => `<li>${esc(k)}: <a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`).join("")
-    : `<li class="muted">${p.simulated ? "Simulated payment, there are no on-chain transactions." : "Links appear here as soon as each step lands on chain."}</li>`;
+  const txLinks = [];
+  if (p.links.intentsExplorer) txLinks.push(["NEAR Intents explorer", p.links.intentsExplorer]);
+  p.links.customerTxs.forEach((u) => txLinks.push(["Customer deposit", u]));
+  p.links.nearTxs.forEach((u) => txLinks.push(["NEAR transaction", u]));
+  p.links.stellarTxs.forEach((u) => txLinks.push([p.delivery.target === "stellar" ? "USDC delivered on Stellar" : "USDC delivery", u]));
+  if (p.links.payoutTx) txLinks.push(["Gaian funding on Stellar", p.links.payoutTx]);
+  const recipient = [p.delivery.target === "intents" ? "Operator account on NEAR (holds the USDC in NEAR Intents)" : "Settlement account on Stellar", p.links.recipient];
+  const li = ([k, u]) => `<li>${esc(k)}: <a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`;
+  const empty = `<li class="muted">${p.simulated ? "Simulated payment, there are no on-chain transactions." : "Transaction links appear here as soon as each step lands on chain."}</li>`;
+  $("links").innerHTML = (txLinks.length ? txLinks.map(li).join("") : empty) + li(recipient);
 
   $("timeline").innerHTML = p.history.map((h) => `<li><span class="muted">${esc(new Date(h.at).toLocaleTimeString())}</span> ${esc(h.note)}</li>`).join("");
   return p;

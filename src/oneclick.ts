@@ -11,16 +11,19 @@ export interface Token {
 
 export interface QuoteRequest {
   dry: boolean;
-  swapType: "EXACT_OUTPUT";
+  swapType: "EXACT_OUTPUT" | "EXACT_INPUT";
   slippageTolerance: number;
   originAsset: string;
-  depositType: "ORIGIN_CHAIN";
+  // ORIGIN_CHAIN: the sender pays on its own chain. INTENTS: the sender already holds the
+  // token inside NEAR Intents (used by the settle step).
+  depositType: "ORIGIN_CHAIN" | "INTENTS";
   destinationAsset: string;
   amount: string;
   refundTo: string;
-  refundType: "ORIGIN_CHAIN";
+  refundType: "ORIGIN_CHAIN" | "INTENTS";
   recipient: string;
-  recipientType: "DESTINATION_CHAIN";
+  // INTENTS: credit the recipient's balance inside NEAR Intents. DESTINATION_CHAIN: withdraw to that chain.
+  recipientType: "DESTINATION_CHAIN" | "INTENTS";
   deadline: string;
   referral?: string;
 }
@@ -33,6 +36,7 @@ export interface Quote {
   amountOut: string;
   amountOutFormatted: string;
   timeEstimate: number;
+  withdrawFee?: string;
   depositAddress?: string;
   depositMemo?: string;
   deadline?: string;

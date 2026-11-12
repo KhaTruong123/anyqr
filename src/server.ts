@@ -9,7 +9,9 @@ import type { Payment } from "./payment-types.js";
 import { PaymentError, PaymentService } from "./payments.js";
 import { SAMPLE_QRS } from "./sample-qrs.js";
 import { PaymentStore } from "./store.js";
-import { DEMO_SETTLEMENT_ADDRESS } from "./demo-defaults.js";
+import { deliveryFromConfig, deliveryLabel } from "./delivery.js";
+import { nearAccountUrl } from "./near.js";
+import { STATUS_LABEL } from "./payment-types.js";
 
 export function buildApp(service: PaymentService) {
   const app = express();
@@ -21,7 +23,10 @@ export function buildApp(service: PaymentService) {
     return {
       ...rest,
       refundTo: refundTo.length > 12 ? `${refundTo.slice(0, 6)}…${refundTo.slice(-4)}` : refundTo,
+      statusLabel: STATUS_LABEL[p.status],
+      deliveryLabel: deliveryLabel(p.delivery.target),
       links: {
+        recipient: p.delivery.target === "intents" ? nearAccountUrl(p.delivery.recipient) : `https://stellar.expert/explorer/public/account/${p.delivery.recipient}`,
         intentsExplorer: p.quote.depositAddress ? intentsExplorerUrl(p.quote.depositAddress) : null,
         customerTxs: p.originTxs.map((t) => t.explorerUrl),
         nearTxs: p.nearTxs.map(nearTxUrl),
@@ -39,6 +44,7 @@ export function buildApp(service: PaymentService) {
   app.get("/api/options", (_req, res) => {
     res.json({
       intentsMode: config.intentsMode,
+      deliverTo: config.deliverTo,
       gaianMode: config.gaianMode,
       maxPaymentUsd: config.maxPaymentUsd,
       tokens: ORIGIN_CHOICES.map((c) => ({ id: `${c.blockchain}:${c.symbol}`, label: c.label })),
@@ -120,10 +126,10 @@ function startPoller(service: PaymentService) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const live = config.intentsMode === "live";
-  if (live && !config.settlementStellarAddress) throw new Error("INTENTS_MODE=live needs SETTLEMENT_STELLAR_ADDRESS, your own Stellar account with a USDC trustline");
+  const delivery = await deliveryFromConfig();
   const service = new PaymentService(new PaymentStore(config.dataFile), new OneClickClient(), makeSettlement(), {
     simulated: !live,
-    settlementAddress: config.settlementStellarAddress || DEMO_SETTLEMENT_ADDRESS,
+    delivery,
     maxPaymentUsd: config.maxPaymentUsd,
     slippageBps: config.slippageBps,
     depositWindowMinutes: config.depositWindowMinutes,
@@ -132,6 +138,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   buildApp(service).listen(config.port, config.host, () => {
     console.log(`AnyQR on http://${config.host}:${config.port}`);
     console.log(`NEAR Intents: ${config.intentsMode === "live" ? "LIVE, mainnet deposits move real money" : "dry quotes, deposits are simulated"}`);
+    console.log(`USDC goes to: ${deliveryLabel(delivery.target)}, recipient ${delivery.recipient}`);
     console.log(`Local payout: ${config.gaianMode === "sandbox" ? "Gaian API" : "mock, no local currency moves"}`);
   });
 }

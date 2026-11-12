@@ -1,10 +1,12 @@
 // One row per payment, columns an accountant can read without a glossary.
+import { deliveryLabel } from "./delivery.js";
 import { intentsExplorerUrl, nearTxUrl } from "./oneclick.js";
 import type { Payment } from "./payment-types.js";
 
 const COLUMNS: Array<[string, (p: Payment) => string | number | undefined]> = [
   ["payment_id", (p) => p.id],
   ["created_utc", (p) => p.createdAt],
+  ["deposit_received_utc", (p) => p.depositReceivedAt],
   ["paid_utc", (p) => p.paidAt],
   ["status", (p) => p.status],
   ["merchant", (p) => p.merchant.name],
@@ -13,7 +15,9 @@ const COLUMNS: Array<[string, (p: Payment) => string | number | undefined]> = [
   ["merchant_account_last4", (p) => p.merchant.account.slice(-4)],
   ["amount_local", (p) => p.amountLocal],
   ["currency_local", (p) => p.currency],
-  ["settled_usdc_stellar", (p) => p.usdc],
+  ["settled_usdc", (p) => p.usdc],
+  ["settled_to", (p) => deliveryLabel(p.delivery.target)],
+  ["settlement_recipient", (p) => p.delivery.recipient],
   ["customer_paid_amount", (p) => p.quote.amountInFormatted],
   ["customer_paid_token", (p) => p.origin.symbol],
   ["customer_paid_chain", (p) => p.origin.blockchain],
@@ -23,7 +27,7 @@ const COLUMNS: Array<[string, (p: Payment) => string | number | undefined]> = [
   ["customer_tx", (p) => p.originTxs.map((t) => t.explorerUrl || t.hash).join(" ")],
   ["near_intents_explorer", (p) => (p.quote.depositAddress ? intentsExplorerUrl(p.quote.depositAddress) : "")],
   ["near_tx", (p) => p.nearTxs.map(nearTxUrl).join(" ")],
-  ["stellar_usdc_tx", (p) => p.destinationTxs.map((t) => t.explorerUrl || t.hash).join(" ")],
+  ["destination_tx", (p) => p.destinationTxs.map((t) => t.explorerUrl || t.hash).join(" ")],
   ["payout_reference", (p) => p.gaianOrderId],
   ["mode", (p) => [p.simulated ? "simulated deposit" : "mainnet", p.demoPayout ? "demo payout" : "gaian payout"].join(", ")],
 ];

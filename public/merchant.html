@@ -11,7 +11,7 @@
 <main style="max-width:1000px">
   <div class="card">
     <h1 style="margin-top:0">Merchant ledger</h1>
-    <p class="muted">Every payment, newest first. The CSV has one row per payment with the local amount, the USDC settled, what the customer paid and a link to every transaction.</p>
+    <p class="muted">Every payment, newest first. The CSV has one row per payment with the local amount, the USDC settled and where it went, what the customer paid and a link to every transaction.</p>
     <a href="/api/payments.csv"><button>Download CSV</button></a>
   </div>
   <div class="card">
@@ -28,10 +28,10 @@ async function load() {
   document.getElementById("rows").innerHTML = list.length
     ? list.map((p) => `<tr>
         <td><a href="/pay/${esc(p.id)}">${esc(new Date(p.createdAt).toLocaleString())}</a></td>
-        <td><span class="status ${esc(p.status)}">${esc(p.status.replace("_", " "))}</span></td>
+        <td><span class="status ${esc(p.status)}">${esc(p.statusLabel)}</span></td>
         <td>${esc(p.merchant.name)} (${esc(p.merchant.country)})</td>
         <td>${esc(Number(p.amountLocal).toLocaleString("en-US"))} ${esc(p.currency)}</td>
-        <td>${esc(p.usdc)}</td>
+        <td>${esc(p.usdc)} <span class="muted">${esc(p.delivery.target === "intents" ? "on NEAR" : "on Stellar")}</span></td>
         <td>${esc(Number(p.quote.amountInFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 }))} ${esc(p.origin.symbol)} (${esc(p.origin.label)})</td></tr>`).join("")
     : `<tr><td colspan="6" class="muted">No payments yet.</td></tr>`;
 }

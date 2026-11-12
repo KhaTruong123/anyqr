@@ -2,13 +2,16 @@
 // Money order is fixed on purpose:
 //   1. price   : Gaian prices the local amount in USDC, 1Click prices the customer's token. Nothing moves.
 //   2. deposit : the customer sends the token to the 1Click deposit address.
-//   3. swap    : NEAR Intents delivers USDC on Stellar to the settlement account, or refunds the customer.
+//   3. swap    : NEAR Intents credits USDC to the operator's NEAR Intents balance (or, in
+//                DELIVER_TO=stellar mode, withdraws it to a Stellar account), or refunds the customer.
 //   4. payout  : only after step 3 reports SUCCESS does Gaian pay the bank account in the QR.
+// The operator moves its NEAR Intents balance to its own rail later, in batches (`npm run settle`).
 import crypto from "node:crypto";
-import { config } from "./config.js";
+import { DELIVERY_ASSET, recipientType, type Delivery } from "./delivery.js";
 import { maskAccount, parseEmvQr, QrError } from "./emv-qr.js";
 import type { Settlement } from "./gaian/settlement.js";
 import { ORIGIN_CHOICES, toBaseUnits, type OneClickClient, type StatusResponse } from "./oneclick.js";
+import { nearAccountExists } from "./near.js";
 import { TERMINAL, type Payment, type PaymentStatus } from "./payment-types.js";
 import type { PaymentStore } from "./store.js";
 
@@ -28,7 +31,6 @@ export interface CreatePaymentInput {
   refundTo: string;
 }
 
-const STELLAR_USDC_ASSET = { blockchain: "stellar", symbol: "USDC" };
 const now = () => new Date().toISOString();
 
 const ADDRESS_RULES: Record<string, RegExp> = {
@@ -46,14 +48,19 @@ export class PaymentService {
     private readonly store: PaymentStore,
     private readonly oneClick: OneClickClient,
     private readonly settlement: Settlement,
-    private readonly opts = {
-      simulated: config.intentsMode !== "live",
-      settlementAddress: config.settlementStellarAddress,
-      maxPaymentUsd: config.maxPaymentUsd,
-      slippageBps: config.slippageBps,
-      depositWindowMinutes: config.depositWindowMinutes,
+    private readonly opts: {
+      simulated: boolean;
+      delivery: Delivery;
+      maxPaymentUsd: number;
+      slippageBps: number;
+      depositWindowMinutes: number;
     },
   ) {}
+
+  private get delivered(): string {
+    const { target, recipient } = this.opts.delivery;
+    return target === "intents" ? `credited to the operator's NEAR Intents balance (${recipient})` : `delivered on Stellar to ${recipient}`;
+  }
 
   async create(input: CreatePaymentInput): Promise<Payment> {
     let parsed;
@@ -76,7 +83,7 @@ export class PaymentService {
     if (choice.blockchain === "near" && !(await nearAccountExists(input.refundTo.trim()))) {
       throw new PaymentError(`NEAR account ${input.refundTo.trim()} does not exist, refunds would have nowhere to go`);
     }
-    if (!this.opts.settlementAddress) throw new PaymentError("SETTLEMENT_STELLAR_ADDRESS is not configured", 500);
+    if (!this.opts.delivery.recipient) throw new PaymentError("No settlement recipient is configured", 500);
 
     const local = await this.settlement.quote(input.qr, parsed, amountLocal);
     if (Number(local.usdc) > this.opts.maxPaymentUsd) {
@@ -85,7 +92,7 @@ export class PaymentService {
 
     const [originToken, usdcToken] = await Promise.all([
       this.oneClick.findToken(choice.blockchain, choice.symbol),
-      this.oneClick.findToken(STELLAR_USDC_ASSET.blockchain, STELLAR_USDC_ASSET.symbol),
+      this.oneClick.findToken(DELIVERY_ASSET[this.opts.delivery.target].blockchain, DELIVERY_ASSET[this.opts.delivery.target].symbol),
     ]);
     if (!originToken || !usdcToken) throw new PaymentError("NEAR Intents does not list this token right now", 503);
 
@@ -100,8 +107,8 @@ export class PaymentService {
       amount: toBaseUnits(local.usdc, usdcToken.decimals),
       refundTo: input.refundTo.trim(),
       refundType: "ORIGIN_CHAIN",
-      recipient: this.opts.settlementAddress,
-      recipientType: "DESTINATION_CHAIN",
+      recipient: this.opts.delivery.recipient,
+      recipientType: recipientType(this.opts.delivery.target),
       deadline,
     });
     if (!this.opts.simulated && !quote.depositAddress) throw new PaymentError("1Click returned no deposit address", 502);
@@ -125,6 +132,7 @@ export class PaymentService {
       amountLocal,
       currency: parsed.country.currency,
       usdc: local.usdc,
+      delivery: { ...this.opts.delivery, assetId: usdcToken.assetId },
       origin: { assetId: originToken.assetId, blockchain: choice.blockchain, symbol: choice.symbol, label: choice.label, decimals: originToken.decimals },
       refundTo: input.refundTo.trim(),
       quote: {
@@ -169,9 +177,9 @@ export class PaymentService {
     const p = this.require(id);
     if (!p.simulated) throw new PaymentError("Only dry-run payments can be simulated", 409);
     if (p.status !== "awaiting_deposit") throw new PaymentError(`Payment is already ${p.status}`, 409);
-    this.move(p, "processing", "Simulated: deposit received, NEAR Intents solver is swapping.");
+    this.depositReceived(p, "Simulated: customer deposit received. NEAR Intents is swapping it to USDC.");
     p.swapStatus = "SUCCESS";
-    this.move(p, "settling", `Simulated: ${p.usdc} USDC delivered on Stellar to the settlement account.`);
+    this.move(p, "settling", `Simulated: swap done, ${p.usdc} USDC ${this.delivered}.`);
     await this.payout(p);
     return p;
   }
@@ -193,7 +201,7 @@ export class PaymentService {
     if (p.status === "settling" && p.gaianOrderId) {
       const state = await this.settlement.refresh(p.gaianOrderId);
       if (state === "completed") this.markPaid(p);
-      if (state === "failed") this.move(p, "failed", "Gaian payout failed. The USDC is still in the settlement account.");
+      if (state === "failed") this.move(p, "failed", "Gaian payout failed. The USDC stays with the operator.");
       return;
     }
     if (p.simulated || !p.quote.depositAddress) return;
@@ -218,12 +226,13 @@ export class PaymentService {
         return;
       case "KNOWN_DEPOSIT_TX":
       case "PROCESSING":
-        if (p.status === "awaiting_deposit") this.move(p, "processing", "Deposit seen, NEAR Intents is swapping.");
+        if (p.status === "awaiting_deposit") this.depositReceived(p, "Customer deposit received. NEAR Intents is swapping it to USDC.");
         else this.store.save(p);
         return;
       case "SUCCESS":
         if (p.status === "awaiting_deposit" || p.status === "processing") {
-          this.move(p, "settling", `${d.amountOutFormatted ?? p.usdc} USDC delivered on Stellar to the settlement account.`);
+          p.depositReceivedAt ??= now();
+          this.move(p, "settling", `Swap done, ${d.amountOutFormatted ?? p.usdc} USDC ${this.delivered}.`);
           await this.payout(p);
         }
         return;
@@ -245,7 +254,7 @@ export class PaymentService {
     if (r.state === "completed") return this.markPaid(p);
     if (r.state === "failed") {
       p.error = r.error;
-      return this.move(p, "failed", `Gaian payout failed: ${r.error ?? "unknown error"}. The USDC is still in the settlement account.`);
+      return this.move(p, "failed", `Gaian payout failed: ${r.error ?? "unknown error"}. The USDC stays with the operator.`);
     }
     this.note(p, "Gaian is paying the bank account.");
   }
@@ -263,6 +272,11 @@ export class PaymentService {
     return p;
   }
 
+  private depositReceived(p: Payment, note: string): void {
+    p.depositReceivedAt = now();
+    this.move(p, "processing", note);
+  }
+
   private move(p: Payment, status: PaymentStatus, note: string): void {
     p.status = status;
     this.note(p, note);
@@ -273,17 +287,4 @@ export class PaymentService {
     p.history.push({ at: p.updatedAt, status: p.status, note });
     this.store.save(p);
   }
-}
-
-// Implicit accounts (64 hex characters) exist as soon as they hold funds, so only named
-// accounts are checked against NEAR RPC.
-export async function nearAccountExists(account: string, rpc = "https://rpc.mainnet.near.org"): Promise<boolean> {
-  if (/^[0-9a-f]{64}$/.test(account)) return true;
-  const res = await fetch(rpc, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "anyqr", method: "query", params: { request_type: "view_account", finality: "final", account_id: account } }),
-  });
-  const body = (await res.json()) as { result?: unknown; error?: unknown };
-  return Boolean(body.result);
 }
