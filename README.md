@@ -107,7 +107,13 @@ Each payment page then shows a deposit address with a QR code, the exact amount,
 
 ### Mainnet test run
 
-Pending. The links of one real payment with a small amount will be added here.
+One real payment on 2026-11-12, made with live mode and a personal wallet:
+
+- Merchant QR: a VietQR for 26,000 VND (demo shop, the local payout is mock).
+- Customer sent 1.021274 USDT on BNB Chain: [BscScan](https://bscscan.com/tx/0x69023a321d64f553b96cbcefd3fe0edc9b7387f0a9492895a3da05a8cddfa243)
+- 1Click swap: [NEAR Intents explorer](https://explorer.near-intents.org/transactions/0x45b5c954867f4AD198024bf62b4bEfc9565EBddf)
+- The operator account received 1.01 USDC on NEAR inside NEAR Intents: [NEAR transaction](https://nearblocks.io/txns/6f1cXSpD3efP8U6ovJhr4S3h1fMkkvw3H8FxYat95zka), [NEAR transaction](https://nearblocks.io/txns/EVPVgnvgaPvmP9qni4jVsBbSPxo2xdJyLGbgvp8Ghs95), [operator account](https://nearblocks.io/address/f9277d65f4edff529c6d682397f5786daa7624dd5da10e2c94094613ffa03649)
+- 1Click saw the deposit at 16:31:39 UTC and reported SUCCESS at 16:31:49 UTC.
 
 ## Safety limits
 
