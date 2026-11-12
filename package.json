@@ -2,13 +2,16 @@
   "name": "anyqr",
   "version": "0.1.0",
   "private": true,
-  "description": "Pay a merchant's bank QR code (VietQR, PromptPay, QR Ph, QRIS, Pix) from any chain and token. NEAR Intents 1Click swaps the payment into USDC on Stellar, Gaian pays out local currency to the bank account in the QR.",
+  "description": "Pay a merchant's bank QR code (VietQR, PromptPay, QR Ph, QRIS, Pix) from any chain and token. NEAR Intents 1Click swaps the payment into USDC on NEAR, credited to the merchant operator's NEAR Intents balance, and a local payout pays the bank account in the QR.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "tsx src/server.ts",
     "demo:dry": "tsx scripts/demo-dry.ts",
+    "settle": "tsx scripts/settle.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
