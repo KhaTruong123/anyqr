@@ -9,7 +9,11 @@ export class PaymentStore {
 
   constructor(private readonly file: string) {
     if (fs.existsSync(file)) {
-      for (const p of JSON.parse(fs.readFileSync(file, "utf8")) as Payment[]) this.items.set(p.id, p);
+      for (const p of JSON.parse(fs.readFileSync(file, "utf8")) as Payment[]) {
+        // Payments saved before delivery targets existed all went to Stellar.
+        p.delivery ??= { target: "stellar", recipient: "", assetId: "" };
+        this.items.set(p.id, p);
+      }
     }
   }
 

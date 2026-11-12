@@ -26,7 +26,7 @@ export function buildApp(service: PaymentService) {
       statusLabel: STATUS_LABEL[p.status],
       deliveryLabel: deliveryLabel(p.delivery.target),
       links: {
-        recipient: p.delivery.target === "intents" ? nearAccountUrl(p.delivery.recipient) : `https://stellar.expert/explorer/public/account/${p.delivery.recipient}`,
+        recipient: p.delivery.target === "intents" ? nearAccountUrl(p.delivery.recipient) : `https://stellar.expert/explorer/public/account/${encodeURIComponent(p.delivery.recipient)}`,
         intentsExplorer: p.quote.depositAddress ? intentsExplorerUrl(p.quote.depositAddress) : null,
         customerTxs: p.originTxs.map((t) => t.explorerUrl),
         nearTxs: p.nearTxs.map(nearTxUrl),

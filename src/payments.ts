@@ -57,8 +57,8 @@ export class PaymentService {
     },
   ) {}
 
-  private get delivered(): string {
-    const { target, recipient } = this.opts.delivery;
+  private delivered(p: Payment): string {
+    const { target, recipient } = p.delivery;
     return target === "intents" ? `credited to the operator's NEAR Intents balance (${recipient})` : `delivered on Stellar to ${recipient}`;
   }
 
@@ -179,7 +179,7 @@ export class PaymentService {
     if (p.status !== "awaiting_deposit") throw new PaymentError(`Payment is already ${p.status}`, 409);
     this.depositReceived(p, "Simulated: customer deposit received. NEAR Intents is swapping it to USDC.");
     p.swapStatus = "SUCCESS";
-    this.move(p, "settling", `Simulated: swap done, ${p.usdc} USDC ${this.delivered}.`);
+    this.move(p, "settling", `Simulated: swap done, ${p.usdc} USDC ${this.delivered(p)}.`);
     await this.payout(p);
     return p;
   }
@@ -232,7 +232,7 @@ export class PaymentService {
       case "SUCCESS":
         if (p.status === "awaiting_deposit" || p.status === "processing") {
           p.depositReceivedAt ??= now();
-          this.move(p, "settling", `Swap done, ${d.amountOutFormatted ?? p.usdc} USDC ${this.delivered}.`);
+          this.move(p, "settling", `Swap done, ${d.amountOutFormatted ?? p.usdc} USDC ${this.delivered(p)}.`);
           await this.payout(p);
         }
         return;

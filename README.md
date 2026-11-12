@@ -37,7 +37,7 @@ Requirements: Node.js 20 or newer.
 git clone https://github.com/KhaTruong123/anyqr.git
 cd anyqr
 npm install
-npm test            # 34 tests, all offline
+npm test            # 40 tests, all offline
 npm run demo:dry    # real 1Click quotes for 5 demo merchants in 5 countries
 ```
 
@@ -124,6 +124,7 @@ Pending. The links of one real payment with a small amount will be added here.
 
 - With `recipientType: INTENTS`, 1Click accepts any NEAR account name as the recipient, even one that does not exist. AnyQR checks the account itself in live mode.
 - 1Click checks that a Stellar recipient trusts USDC before it quotes, and says so in the error. In `DELIVER_TO=stellar` mode the settlement account must open the trustline first.
+- 1Click can pause a route for a while. On 2026-11-12 at 16:16 UTC every pair from Solana answered "Quoting for this pair is not available", twenty minutes after it had quoted fine. `npm run demo:dry` then prints `FAILED` for that country, carries on with the others, and exits with code 1.
 - Swaps from Tron have a $100 minimum right now, so Tron is not offered for small shop payments.
 - A quote with a NEAR refund account that does not exist returns HTTP 500. AnyQR checks the account first and shows a clear error.
 

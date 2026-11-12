@@ -9,7 +9,7 @@ import { formatUnits, planSettlement } from "../src/settle.js";
 
 const previewArg = process.argv.indexOf("--preview");
 const previewUsdc = previewArg > 0 ? Number(process.argv[previewArg + 1]) : undefined;
-if (previewUsdc !== undefined && !(previewUsdc > 0)) throw new Error("--preview needs a USDC amount, for example --preview 10");
+if (previewUsdc !== undefined && !(Number.isFinite(previewUsdc) && previewUsdc > 0)) throw new Error("--preview needs a USDC amount, for example --preview 10");
 
 const account = config.settlementNearAccount || DEMO_RECIPIENT.intents;
 const stellarAddress = config.operatorStellarAddress || DEMO_RECIPIENT.stellar;

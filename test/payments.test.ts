@@ -208,6 +208,33 @@ test("live: REFUNDED is shown to the merchant with the refunded amount", async (
   assert.equal(svc.get(p.id)!.history.length, r.history.length);
 });
 
+test("the settlement note names the payment's own recipient, even after a config change", async () => {
+  const { svc, oc, file } = service(false);
+  const p = await svc.create({ qr: vnQr, origin: "bsc:USDT", refundTo: EVM_REFUND });
+  const after = new PaymentService(new PaymentStore(file), oc.client, new MockSettlement(), {
+    simulated: false,
+    delivery: { target: "stellar", recipient: STELLAR },
+    maxPaymentUsd: 20,
+    slippageBps: 100,
+    depositWindowMinutes: 30,
+  });
+  oc.setStatus({ status: "SUCCESS", updatedAt: "", swapDetails: { amountOutFormatted: "9.72" } });
+  await after.pollAll();
+  const note = after.get(p.id)!.history.find((h) => h.status === "settling")!.note;
+  assert.match(note, /NEAR Intents balance \(anyqr-operator\.near\)/);
+});
+
+test("payments saved before delivery targets existed still load", async () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "anyqr-")), "payments.json");
+  const { svc } = service(true);
+  const p = await svc.create({ qr: vnQr, origin: "bsc:USDT", refundTo: EVM_REFUND });
+  const { delivery: _drop, ...old } = p;
+  fs.writeFileSync(file, JSON.stringify([old]));
+  const loaded = new PaymentStore(file).get(p.id)!;
+  assert.equal(loaded.delivery.target, "stellar");
+  assert.match(paymentsToCsv([loaded]), /USDC on Stellar/);
+});
+
 test("payments survive a restart", async () => {
   const { svc, file } = service(true);
   const p = await svc.create({ qr: vnQr, origin: "bsc:USDT", refundTo: EVM_REFUND });
