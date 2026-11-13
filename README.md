@@ -11,7 +11,7 @@ In Southeast Asia and Latin America, shops show a bank QR code: VietQR in Vietna
 ## What AnyQR does
 
 1. The merchant (or the customer) pastes the QR. AnyQR reads it: country, currency, amount, bank account.
-2. The payout operator prices the local amount in USDC. In this build the operator is Gaian, a payments company that pays out to local bank accounts, and the price comes from a demo rate (see "What is real").
+2. The payout operator prices the local amount in USDC. In this build the operator is Gaian, a live payments company that already processes about $200K a month in payouts to local bank accounts. AnyQR is the new part built for this hackathon, and it plugs into that existing payout rail. The price here comes from a demo rate (see "What is real").
 3. NEAR Intents 1Click quotes the customer's own token for exactly that USDC amount, credited as USDC on NEAR to the operator's balance inside NEAR Intents (`recipientType: INTENTS`). The customer gets a deposit address and an exact amount.
 4. AnyQR polls 1Click. As soon as 1Click reports the deposit, the merchant sees **Customer deposit received**.
 5. Only after 1Click reports `SUCCESS` does the operator pay the bank account in the QR. Then the merchant sees **Paid**. A refunded or failed swap never triggers a payout.
